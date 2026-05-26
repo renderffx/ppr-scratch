@@ -4,6 +4,7 @@ import { prerenderToNodeStream } from 'react-dom/static';
 import { resumeToPipeableStream } from 'react-dom/server';
 import { createElement, Suspense } from 'react';
 import { Writable } from 'node:stream';
+import { setPhase, PHASES } from '../src/phase.js';
 
 const NEVER = new Promise(() => {});
 
@@ -38,9 +39,9 @@ async function collectStream(readable) {
 
 test('Full PPR Pipeline: prerender -> resume e2e', async (t) => {
   await t.test('Prerender produces shell with suspense boundaries and postponed state', async () => {
-    globalThis.__pprPhase = 'prerender';
+    setPhase(PHASES.PRERENDER);
     const result = await prerenderToNodeStream(createElement(App), { onError() {} });
-    globalThis.__pprPhase = undefined;
+    setPhase(undefined);
 
     assert.ok(result.postponed, 'Must have postponed state');
     assert.ok(Array.isArray(result.postponed.replayNodes), 'Must have replayNodes');
@@ -55,9 +56,9 @@ test('Full PPR Pipeline: prerender -> resume e2e', async (t) => {
   });
 
   await t.test('Resume produces replayed dynamic content', async () => {
-    globalThis.__pprPhase = 'prerender';
+    setPhase(PHASES.PRERENDER);
     const result = await prerenderToNodeStream(createElement(App), { onError() {} });
-    globalThis.__pprPhase = undefined;
+    setPhase(undefined);
 
     const resumedHtml = await new Promise((resolve, reject) => {
       const chunks = [];
@@ -79,9 +80,9 @@ test('Full PPR Pipeline: prerender -> resume e2e', async (t) => {
   });
 
   await t.test('Postponed state is JSON-serializable', async () => {
-    globalThis.__pprPhase = 'prerender';
+    setPhase(PHASES.PRERENDER);
     const result = await prerenderToNodeStream(createElement(App), { onError() {} });
-    globalThis.__pprPhase = undefined;
+    setPhase(undefined);
 
     const json = JSON.stringify(result.postponed);
     const parsed = JSON.parse(json);

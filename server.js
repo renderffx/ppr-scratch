@@ -60,9 +60,9 @@ app.post('/resume', async (req, res) => {
 
   try {
     const hasCachedContent = CACHED_NAMES.some(n => getCachedBuffer(n, {}));
-    const resumedHtml = [];
 
     if (hasCachedContent) {
+      const resumedHtml = [];
       for (const name of CACHED_NAMES) {
         const buf = getCachedBuffer(name, {});
         if (buf) {
@@ -75,9 +75,19 @@ app.post('/resume', async (req, res) => {
           );
         }
       }
-    } else {
-      const postponed = JSON.parse(readFileSync(postponedPath, 'utf-8'));
-      const chunks = [];
+      return res.json({
+        resumed: true,
+        source: 'cache',
+        boundaries: resumedHtml.length,
+        html: resumedHtml.join('\n'),
+        timestamp: Date.now(),
+      });
+    }
+
+    const postponed = JSON.parse(readFileSync(postponedPath, 'utf-8'));
+    const chunks = [];
+
+    const html = await new Promise((resolve, reject) => {
       const streamable = resumeToPipeableStream(createElement(App), postponed, {
         onShellReady() {
           const writable = new Writable({
@@ -87,24 +97,25 @@ app.post('/resume', async (req, res) => {
             },
           });
           streamable.pipe(writable);
-          writable.on('finish', () => {
-            resumedHtml.push(Buffer.concat(chunks).toString('utf-8'));
-          });
+          writable.on('finish', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+          writable.on('error', reject);
         },
         onShellError(err) {
-          return res.status(500).json({ error: err.message });
+          reject(err);
+        },
+        onAllReady() {
+          // All content has been resumed — ensure flush
         },
       });
-      await new Promise(r => setTimeout(r, 200));
-    }
+    });
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('X-PPR-Resume', 'true');
     res.json({
       resumed: true,
-      source: hasCachedContent ? 'cache' : 'resume',
-      boundaries: resumedHtml.length,
-      html: resumedHtml.join('\n'),
+      source: 'resume',
+      boundaries: 1,
+      html,
       timestamp: Date.now(),
     });
   } catch (err) {

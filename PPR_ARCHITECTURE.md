@@ -48,7 +48,13 @@ POST /resume/stream → same but chunked HTML transfer
 
 `prerenderToNodeStream` in the public React canary resolves on `onAllReady` (waits for ALL content). This hangs if a component suspends with a never-resolving promise. The patch changes `onShellReady` from `void 0` to a function that calls `abort(request)`. Aborting pending tasks with `trackedPostpones` set causes React to mark them as real postponed state instead of waiting.
 
-File patched: `node_modules/react-dom/cjs/react-dom-server.node.development.js`
+This patch is applied automatically via `postinstall` script:
+
+```
+node scripts/patch-react-dom.mjs
+```
+
+Target files: `node_modules/react-dom/cjs/react-dom-server.node.{development,production}.js`
 
 ```js
 // Before:
