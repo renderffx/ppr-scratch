@@ -8,11 +8,21 @@ import { getCachedBuffer } from './src/flight-cache.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const RESUME_TIMEOUT_MS = parseInt(process.env.PPR_RESUME_TIMEOUT || '10000', 10);
 
 app.use(express.json());
 app.use(express.static('./public', { index: false }));
 
 const CACHED_NAMES = ['CookieBasedGreeting', 'HeaderBasedContent', 'AsyncDataWidget', 'AuthBasedSection'];
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
 app.get('/', (req, res) => {
   const shellPath = './dist/shell.html';
@@ -86,7 +96,7 @@ app.post('/resume', async (req, res) => {
     const postponed = JSON.parse(readFileSync(postponedPath, 'utf-8'));
     const chunks = [];
 
-    const html = await new Promise((resolve, reject) => {
+    const html = await withTimeout(new Promise((resolve, reject) => {
       const streamable = resumeToPipeableStream(createElement(App), postponed, {
         onShellReady() {
           const writable = new Writable({
@@ -106,7 +116,7 @@ app.post('/resume', async (req, res) => {
           // All content has been resumed — ensure flush
         },
       });
-    });
+    }), RESUME_TIMEOUT_MS, 'Resume');
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('X-PPR-Resume', 'true');
@@ -127,6 +137,10 @@ app.post('/resume/stream', async (req, res) => {
   if (!existsSync(postponedPath)) {
     return res.status(400).json({ error: 'No postponed state' });
   }
+
+  res.setTimeout(RESUME_TIMEOUT_MS, () => {
+    res.end(`<!--PPR_TIMEOUT-->Resume timed out after ${RESUME_TIMEOUT_MS}ms`);
+  });
 
   try {
     res.setHeader('Content-Type', 'text/html');
