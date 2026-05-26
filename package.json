@@ -4,6 +4,7 @@
   "description": "Next.js-style Partial Prerendering engine using React 19 Canary",
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/patch-react-dom.mjs",
     "clean": "node -e \"import{rmSync}from'node:fs';rmSync('./dist',{recursive:true,force:true});console.log('Cleaned dist/')\"",
     "bundle": "esbuild src/App.js --bundle --format=esm --platform=node --outfile=dist/App.bundle.js --loader:.js=jsx",
     "build:rsc": "node --conditions react-server build-rsc.js",
