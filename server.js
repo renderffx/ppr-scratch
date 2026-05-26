@@ -1,10 +1,11 @@
 import express from 'express';
 import { readFileSync, existsSync } from 'node:fs';
-import { resumeToPipeableStream, renderToPipeableStream } from 'react-dom/server';
+import { resumeToPipeableStream } from 'react-dom/server';
 import { createElement } from 'react';
 import { Writable } from 'node:stream';
 import App from './dist/App.bundle.js';
 import { getCachedBuffer } from './src/flight-cache.js';
+import { setRequestContext } from './src/dynamic-apis.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -121,6 +122,7 @@ app.post('/resume', async (req, res) => {
     const postponed = readPostponed(postponedPath);
     const chunks = [];
 
+    setRequestContext(req);
     const html = await withTimeout(new Promise((resolve, reject) => {
       const streamable = resumeToPipeableStream(createElement(App), postponed, {
         onShellReady() {
@@ -139,6 +141,7 @@ app.post('/resume', async (req, res) => {
         },
       });
     }), RESUME_TIMEOUT_MS, 'Resume');
+    setRequestContext(null);
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('X-PPR-Resume', 'true');
@@ -189,20 +192,24 @@ app.post('/resume/stream', async (req, res) => {
       }
     } else {
       const postponed = readPostponed(postponedPath);
+      setRequestContext(req);
       const streamable = resumeToPipeableStream(createElement(App), postponed, {
         onShellReady() {
           streamable.pipe(res);
         },
         onShellError(err) {
+          setRequestContext(null);
           res.end(`<!--PPR_ERROR-->${err.message}`);
         },
       });
+      streamable.on('end', () => setRequestContext(null));
       return;
     }
 
     res.write('<!--PPR_RESUME_STREAM_END-->');
     res.end();
   } catch (err) {
+    setRequestContext(null);
     try { res.status(500).json({ error: err.message }); } catch {}
   }
 });

@@ -63,6 +63,12 @@ async function embedCacheEntries(html) {
   return result;
 }
 
+function embedClientBootstrap(html) {
+  const script = `<script>function $RC(a,b){var c=document.getElementById(a),d=document.getElementById(b);if(c&&d){var e=d.querySelector('template[data-type]');if(e){var f=e.content.cloneNode(!0);c.parentNode.replaceChild(f,c)}else d.removeAttribute('hidden'),c.replaceWith(d)}}function $RS(a,b){var c=document.getElementById(a);c&&c.removeAttribute('hidden')}
+self.__rsc=[];(function(){var p=self.__rsc;self.__rsc={push:function(c){var s=document.createElement('script');s.type='application/json';s.textContent=c;document.body.appendChild(s)}};for(var i=0;i<p.length;i++)self.__rsc.push(p[i])})();</script>`;
+  return html.replace('</head>', `${script}\n</head>`);
+}
+
 function validateShell(html) {
   const errors = [];
   if (!html.startsWith('<!DOCTYPE html>')) errors.push('Missing DOCTYPE');
@@ -131,6 +137,7 @@ async function build() {
   }
 
   shellHtml = await embedCacheEntries(shellHtml);
+  shellHtml = embedClientBootstrap(shellHtml);
 
   mkdirSync('./dist', { recursive: true });
   atomicWrite('./dist/shell.html', shellHtml);

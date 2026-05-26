@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { suspendIfPrerendering } from './dynamic-apis.js';
+import { suspendIfPrerendering, cookies, headers } from './dynamic-apis.js';
 import ErrorBoundary from './ErrorBoundary.js';
 
 function StaticHeader() {
@@ -18,43 +18,71 @@ function StaticHeader() {
 function StaticFooter() {
   return React.createElement('footer', { className: 'static-shell' },
     React.createElement('hr', null),
-    React.createElement('p', null, '© 2026 PPR Demo. Static shell prerendered at build time.')
+    React.createElement('p', null, '\u00A9 2026 PPR Demo. Static shell prerendered at build time.')
   );
 }
 
 function CookieBasedGreeting() {
   suspendIfPrerendering();
 
+  const c = cookies();
+  const userName = c.user || c.username || 'Guest';
+  const greeting = c.greeting || 'Hello';
+
   return React.createElement('div', { className: 'dynamic-hole', 'data-ppr': 'cookie-greeting' },
     React.createElement('h2', null, 'Personalized Greeting'),
-    React.createElement('p', null, 'Hello, User! (cookie-based)')
+    React.createElement('p', null, `${greeting}, ${userName}! (based on cookie)`),
+    React.createElement('p', { className: 'meta' }, `user=${userName} greeting=${greeting}`)
   );
 }
 
 function HeaderBasedContent() {
   suspendIfPrerendering();
 
+  const h = headers();
+  const ua = h['user-agent'] || 'unknown';
+  const lang = h['accept-language'] || 'en-US';
+
   return React.createElement('div', { className: 'dynamic-hole', 'data-ppr': 'header-content' },
     React.createElement('h2', null, 'Request-Time Content'),
-    React.createElement('p', null, 'This content was rendered at request time (header-based).')
+    React.createElement('p', null, 'Rendered from real request headers.'),
+    React.createElement('ul', null,
+      React.createElement('li', null, `User-Agent: ${ua}`),
+      React.createElement('li', null, `Language: ${lang}`)
+    )
   );
 }
 
 function AsyncDataWidget() {
   suspendIfPrerendering();
 
+  const c = cookies();
+  const ts = new Date().toISOString();
+  const via = c.source || 'direct';
+
   return React.createElement('div', { className: 'dynamic-hole', 'data-ppr': 'async-data' },
     React.createElement('h2', null, 'Live Data'),
-    React.createElement('p', null, 'Live data fetched at request time.')
+    React.createElement('p', null, 'Rendered at request time:'),
+    React.createElement('ul', null,
+      React.createElement('li', null, `Timestamp: ${ts}`),
+      React.createElement('li', null, `Source: ${via}`)
+    )
   );
 }
 
 function AuthBasedSection() {
   suspendIfPrerendering();
 
+  const c = cookies();
+  const h = headers();
+  const token = c.token || h.authorization || 'none';
+  const role = c.role || 'viewer';
+  const authed = token !== 'none';
+
   return React.createElement('div', { className: 'dynamic-hole', 'data-ppr': 'auth-section' },
     React.createElement('h2', null, 'User Profile'),
-    React.createElement('p', null, 'User profile based on session.')
+    React.createElement('p', null, authed ? 'Authenticated session.' : 'Anonymous session.'),
+    React.createElement('p', { className: 'meta' }, `role=${role} authed=${authed}`)
   );
 }
 

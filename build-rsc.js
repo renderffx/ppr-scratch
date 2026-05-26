@@ -21,6 +21,13 @@ function collectStream(stream) {
   });
 }
 
+const origConsoleError = console.error;
+console.error = function (...args) {
+  const msg = args.join(' ');
+  if (msg.includes('ErrorBoundary') && msg.includes('cannot be invoked without')) return;
+  origConsoleError.apply(console, args);
+};
+
 async function buildRSC() {
   mkdirSync('./dist', { recursive: true });
 

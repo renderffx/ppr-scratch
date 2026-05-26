@@ -19,17 +19,29 @@ function collectBuffer(stream) {
 async function prewarm() {
   mkdirSync('./.rsc_cache', { recursive: true });
   const webpackMap = {};
+  let cached = 0;
+  let failed = 0;
 
   for (const [name, { createElement: elFactory }] of Object.entries(cachedComponents)) {
-    const element = elFactory();
-    const wrapped = createElement('div', { 'data-cache-key': name }, element);
-    const stream = renderToPipeableStream(wrapped, webpackMap, {});
-    const buf = await collectBuffer(stream);
-    await writeCacheEntry(name, {}, buf);
-    console.log(`  cached ${name}: ${buf.length} bytes`);
+    try {
+      const element = elFactory();
+      const wrapped = createElement('div', { 'data-cache-key': name }, element);
+      const stream = renderToPipeableStream(wrapped, webpackMap, {});
+      const buf = await collectBuffer(stream);
+      await writeCacheEntry(name, {}, buf);
+      console.log(`  cached ${name}: ${buf.length} bytes`);
+      cached++;
+    } catch (err) {
+      console.error(`  [WARN] failed to cache ${name}: ${err.message}`);
+      failed++;
+    }
   }
 
-  console.log(`RSC cache prewarm complete: ${Object.keys(cachedComponents).length} entries`);
+  const total = Object.keys(cachedComponents).length;
+  console.log(`RSC cache prewarm: ${cached}/${total} entries cached${failed > 0 ? `, ${failed} failed` : ''}`);
+  if (cached === 0) {
+    throw new Error('All cache entries failed to prewarm');
+  }
 }
 
 prewarm()
