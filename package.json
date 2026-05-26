@@ -25,7 +25,7 @@
     "prerendering",
     "nextjs"
   ],
-  "author": "",
+  "author": "renderffx (https://x.com/infinterenders)",
   "license": "ISC",
   "dependencies": {
     "express": "^5.2.1",
