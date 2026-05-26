@@ -5,7 +5,6 @@ import { createElement } from 'react';
 import { Writable } from 'node:stream';
 import App from './dist/App.bundle.js';
 import { getCachedBuffer } from './src/flight-cache.js';
-import { cachedComponents } from './src/cache-registry.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,9 +39,9 @@ app.get('/rsc-payload', (req, res) => {
   res.send(payload);
 });
 
-app.get('/cache/:name', (req, res) => {
+app.get('/cache/:name', async (req, res) => {
   const { name } = req.params;
-  const buf = getCachedBuffer(name, {});
+  const buf = await getCachedBuffer(name, {});
   if (!buf) {
     return res.status(404).json({ error: `No cache entry for ${name}` });
   }
@@ -64,7 +63,7 @@ app.post('/resume', async (req, res) => {
     if (hasCachedContent) {
       const resumedHtml = [];
       for (const name of CACHED_NAMES) {
-        const buf = getCachedBuffer(name, {});
+        const buf = await getCachedBuffer(name, {});
         if (buf) {
           resumedHtml.push(
             `<div class="ppr-cached-boundary" data-component="${name}">` +
@@ -135,11 +134,12 @@ app.post('/resume/stream', async (req, res) => {
     res.setHeader('Transfer-Encoding', 'chunked');
     res.write('<!--PPR_RESUME_STREAM-->');
 
-    const hasCachedContent = CACHED_NAMES.some(n => getCachedBuffer(n, {}));
+    const cacheChecks = await Promise.all(CACHED_NAMES.map(n => getCachedBuffer(n, {})));
+    const hasCachedContent = cacheChecks.some(Boolean);
 
     if (hasCachedContent) {
       for (const name of CACHED_NAMES) {
-        const buf = getCachedBuffer(name, {});
+        const buf = await getCachedBuffer(name, {});
         if (buf) {
           res.write(
             `<div class="streamed-boundary" data-component="${name}">` +

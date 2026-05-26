@@ -105,19 +105,17 @@ test('dynamic-apis.js', async (t) => {
 });
 
 test('flight-cache.js', async (t) => {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'ppr-test-'));
-
   await t.test('getCachedBuffer returns null for missing entry', async () => {
     const { getCachedBuffer } = await import('../src/flight-cache.js');
-    const result = getCachedBuffer('NonExistent', {});
+    const result = await getCachedBuffer('NonExistent', {});
     assert.strictEqual(result, null);
   });
 
   await t.test('writeCacheEntry and getCachedBuffer roundtrip', async () => {
     const { writeCacheEntry, getCachedBuffer } = await import('../src/flight-cache.js');
     const data = Buffer.from('test-data');
-    writeCacheEntry('TestComp', { id: 1 }, data);
-    const retrieved = getCachedBuffer('TestComp', { id: 1 });
+    await writeCacheEntry('TestComp', { id: 1 }, data);
+    const retrieved = await getCachedBuffer('TestComp', { id: 1 });
     assert.ok(retrieved);
     assert.strictEqual(retrieved.toString(), 'test-data');
   });
@@ -134,8 +132,8 @@ test('flight-cache.js', async (t) => {
   await t.test('cacheManifest returns entry metadata', async () => {
     const { writeCacheEntry, cacheManifest } = await import('../src/flight-cache.js');
     const data = Buffer.from('manifest-test');
-    writeCacheEntry('ManifestComp', {}, data);
-      const entries = cacheManifest();
+    await writeCacheEntry('ManifestComp', {}, data);
+    const entries = await cacheManifest();
     assert.ok(entries.length >= 1);
     const entry = entries[0];
     assert.ok(entry.key.length === 32, 'key should be md5 hash');
@@ -145,22 +143,22 @@ test('flight-cache.js', async (t) => {
 
   await t.test('invalidateCache removes entry', async () => {
     const { writeCacheEntry, getCachedBuffer, invalidateCache } = await import('../src/flight-cache.js');
-    writeCacheEntry('TempComp', {}, Buffer.from('temp'));
-    assert.ok(getCachedBuffer('TempComp', {}));
-    invalidateCache('TempComp', {});
-    assert.strictEqual(getCachedBuffer('TempComp', {}), null);
+    await writeCacheEntry('TempComp', {}, Buffer.from('temp'));
+    assert.ok(await getCachedBuffer('TempComp', {}));
+    await invalidateCache('TempComp', {});
+    assert.strictEqual(await getCachedBuffer('TempComp', {}), null);
   });
 
   await t.test('getCachedStream returns null for missing entry', async () => {
     const { getCachedStream } = await import('../src/flight-cache.js');
-    const result = getCachedStream('NonExistent', {});
+    const result = await getCachedStream('NonExistent', {});
     assert.strictEqual(result, null);
   });
 
   await t.test('getCachedStream returns readable stream for existing entry', async () => {
     const { writeCacheEntry, getCachedStream } = await import('../src/flight-cache.js');
-    writeCacheEntry('StreamComp', {}, Buffer.from('stream-data'));
-    const stream = getCachedStream('StreamComp', {});
+    await writeCacheEntry('StreamComp', {}, Buffer.from('stream-data'));
+    const stream = await getCachedStream('StreamComp', {});
     assert.ok(stream);
     assert.strictEqual(stream.readable, true);
     stream.destroy();

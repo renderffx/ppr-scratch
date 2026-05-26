@@ -48,11 +48,11 @@ function embedRSCPayload(html, payload) {
   return html.replace('</body>', `${rscScript}</body>`);
 }
 
-function embedCacheEntries(html) {
+async function embedCacheEntries(html) {
   const cached = ['CookieBasedGreeting', 'HeaderBasedContent', 'AsyncDataWidget', 'AuthBasedSection'];
   let result = html;
   for (const name of cached) {
-    const buf = getCachedBuffer(name, {});
+    const buf = await getCachedBuffer(name, {});
     if (buf) {
       const b64 = buf.toString('base64');
       result = result.replace('</body>',
@@ -123,13 +123,13 @@ async function build() {
     shellHtml = embedRSCPayload(shellHtml, rscPayload);
   }
 
-  shellHtml = embedCacheEntries(shellHtml);
+  shellHtml = await embedCacheEntries(shellHtml);
 
   mkdirSync('./dist', { recursive: true });
   atomicWrite('./dist/shell.html', shellHtml);
   atomicWrite('./dist/postponed.json', JSON.stringify(postponed, null, 2));
 
-  const cacheEntries = cacheManifest();
+  const cacheEntries = await cacheManifest();
   const manifest = {
     version: 1,
     buildTime: Date.now(),
