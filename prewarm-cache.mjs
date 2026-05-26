@@ -25,7 +25,7 @@ async function prewarm() {
     const wrapped = createElement('div', { 'data-cache-key': name }, element);
     const stream = renderToPipeableStream(wrapped, webpackMap, {});
     const buf = await collectBuffer(stream);
-    writeCacheEntry(name, {}, buf);
+    await writeCacheEntry(name, {}, buf);
     console.log(`  cached ${name}: ${buf.length} bytes`);
   }
 
