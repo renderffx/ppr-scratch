@@ -48,11 +48,11 @@ function embedRSCPayload(html, payload) {
   return html.replace('</body>', `${rscScript}</body>`);
 }
 
-function embedCacheEntries(html) {
+async function embedCacheEntries(html) {
   const cached = ['CookieBasedGreeting', 'HeaderBasedContent', 'AsyncDataWidget', 'AuthBasedSection'];
   let result = html;
   for (const name of cached) {
-    const buf = getCachedBuffer(name, {});
+    const buf = await getCachedBuffer(name, {});
     if (buf) {
       const b64 = buf.toString('base64');
       result = result.replace('</body>',
@@ -80,6 +80,13 @@ async function build() {
 
   verifyPatch();
   console.log('  [OK]   React DOM patch verified\n');
+
+  if (!existsSync('./dist/App.bundle.js')) {
+    throw new Error('dist/App.bundle.js not found. Run: npm run bundle');
+  }
+  if (!existsSync('./dist/rsc-payload.bin')) {
+    throw new Error('dist/rsc-payload.bin not found. Run: npm run build:rsc');
+  }
 
   execSync('node --conditions react-server prewarm-cache.mjs', { stdio: 'inherit' });
   console.log('');
@@ -123,13 +130,13 @@ async function build() {
     shellHtml = embedRSCPayload(shellHtml, rscPayload);
   }
 
-  shellHtml = embedCacheEntries(shellHtml);
+  shellHtml = await embedCacheEntries(shellHtml);
 
   mkdirSync('./dist', { recursive: true });
   atomicWrite('./dist/shell.html', shellHtml);
   atomicWrite('./dist/postponed.json', JSON.stringify(postponed, null, 2));
 
-  const cacheEntries = cacheManifest();
+  const cacheEntries = await cacheManifest();
   const manifest = {
     version: 1,
     buildTime: Date.now(),

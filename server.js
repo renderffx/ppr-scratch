@@ -5,15 +5,24 @@ import { createElement } from 'react';
 import { Writable } from 'node:stream';
 import App from './dist/App.bundle.js';
 import { getCachedBuffer } from './src/flight-cache.js';
-import { cachedComponents } from './src/cache-registry.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const RESUME_TIMEOUT_MS = parseInt(process.env.PPR_RESUME_TIMEOUT || '10000', 10);
 
 app.use(express.json());
 app.use(express.static('./public', { index: false }));
 
 const CACHED_NAMES = ['CookieBasedGreeting', 'HeaderBasedContent', 'AsyncDataWidget', 'AuthBasedSection'];
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
 app.get('/', (req, res) => {
   const shellPath = './dist/shell.html';
@@ -40,9 +49,9 @@ app.get('/rsc-payload', (req, res) => {
   res.send(payload);
 });
 
-app.get('/cache/:name', (req, res) => {
+app.get('/cache/:name', async (req, res) => {
   const { name } = req.params;
-  const buf = getCachedBuffer(name, {});
+  const buf = await getCachedBuffer(name, {});
   if (!buf) {
     return res.status(404).json({ error: `No cache entry for ${name}` });
   }
@@ -64,7 +73,7 @@ app.post('/resume', async (req, res) => {
     if (hasCachedContent) {
       const resumedHtml = [];
       for (const name of CACHED_NAMES) {
-        const buf = getCachedBuffer(name, {});
+        const buf = await getCachedBuffer(name, {});
         if (buf) {
           resumedHtml.push(
             `<div class="ppr-cached-boundary" data-component="${name}">` +
@@ -87,7 +96,7 @@ app.post('/resume', async (req, res) => {
     const postponed = JSON.parse(readFileSync(postponedPath, 'utf-8'));
     const chunks = [];
 
-    const html = await new Promise((resolve, reject) => {
+    const html = await withTimeout(new Promise((resolve, reject) => {
       const streamable = resumeToPipeableStream(createElement(App), postponed, {
         onShellReady() {
           const writable = new Writable({
@@ -107,7 +116,7 @@ app.post('/resume', async (req, res) => {
           // All content has been resumed — ensure flush
         },
       });
-    });
+    }), RESUME_TIMEOUT_MS, 'Resume');
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('X-PPR-Resume', 'true');
@@ -129,17 +138,22 @@ app.post('/resume/stream', async (req, res) => {
     return res.status(400).json({ error: 'No postponed state' });
   }
 
+  res.setTimeout(RESUME_TIMEOUT_MS, () => {
+    res.end(`<!--PPR_TIMEOUT-->Resume timed out after ${RESUME_TIMEOUT_MS}ms`);
+  });
+
   try {
     res.setHeader('Content-Type', 'text/html');
     res.setHeader('X-PPR-Resume', 'true');
     res.setHeader('Transfer-Encoding', 'chunked');
     res.write('<!--PPR_RESUME_STREAM-->');
 
-    const hasCachedContent = CACHED_NAMES.some(n => getCachedBuffer(n, {}));
+    const cacheChecks = await Promise.all(CACHED_NAMES.map(n => getCachedBuffer(n, {})));
+    const hasCachedContent = cacheChecks.some(Boolean);
 
     if (hasCachedContent) {
       for (const name of CACHED_NAMES) {
-        const buf = getCachedBuffer(name, {});
+        const buf = await getCachedBuffer(name, {});
         if (buf) {
           res.write(
             `<div class="streamed-boundary" data-component="${name}">` +
