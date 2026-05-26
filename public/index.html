@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPR Engine Demo</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#e6edf3;line-height:1.6;padding:2rem}
+h1{font-size:2rem;margin-bottom:.5rem}
+.sub{color:#8b949e;margin-bottom:2rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-bottom:2rem}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:1.25rem;transition:border-color .2s}
+.card:hover{border-color:#58a6ff}
+.card h3{margin-bottom:.5rem;font-size:1.1rem}
+.card h3 a{color:#58a6ff;text-decoration:none}
+.card h3 a:hover{text-decoration:underline}
+.card p{color:#8b949e;font-size:.9rem}
+.badge{display:inline-block;background:#1f6feb;color:#fff;font-size:.7rem;padding:2px 8px;border-radius:999px;margin-bottom:.75rem}
+code{background:#1c2128;padding:2px 6px;border-radius:4px;font-size:.85rem;color:#f0e6d0}
+pre{background:#1c2128;padding:1rem;border-radius:8px;overflow-x:auto;margin:1rem 0;font-size:.85rem;border:1px solid #30363d}
+</style>
+</head>
+<body>
+<h1>Partial Prerendering Engine</h1>
+<p class="sub">Next.js-style PPR using React 19 Canary — <code>prerenderToNodeStream</code> + <code>resumeToPipeableStream</code></p>
+
+<div class="grid">
+  <div class="card">
+    <span class="badge">instant</span>
+    <h3><a href="/">Static Shell</a></h3>
+    <p>Prerendered HTML served instantly. No JS required. Contains <code>&lt;!--$?--&gt;</code> Suspense boundary markers and embedded RSC Flight payload.</p>
+  </div>
+  <div class="card">
+    <span class="badge">live</span>
+    <h3><a href="/live">Live Resume</a></h3>
+    <p>Request-time resume with <strong>your</strong> request data. Set <code>user</code>, <code>greeting</code>, <code>role</code> cookies to see personalization.</p>
+  </div>
+  <div class="card">
+    <span class="badge">debug</span>
+    <h3><a href="/debug">Debug State</a></h3>
+    <p>Full PPR system state: build artifacts, postponed boundaries, cache entries, resume status, and manifest metadata.</p>
+  </div>
+  <div class="card">
+    <span class="badge">data</span>
+    <h3><a href="/api/status">API Status</a></h3>
+    <p>Build health endpoint showing artifact presence, boundary count, cache stats, and component list.</p>
+  </div>
+  <div class="card">
+    <span class="badge">payload</span>
+    <h3><a href="/rsc-payload">RSC Flight Payload</a></h3>
+    <p>Raw React Server Components Flight v1 binary protocol payload — <code>11712</code> bytes of serialized component tree.</p>
+  </div>
+  <div class="card">
+    <span class="badge">manifest</span>
+    <h3><a href="/api/manifest">Build Manifest</a></h3>
+    <p>Full build metadata: boundaries, cache entries, timestamps, and React version information.</p>
+  </div>
+</div>
+
+<h2>Try PPR Live</h2>
+<p>Open <a href="/live" style="color:#58a6ff">/live</a> with custom cookies to see real personalization:</p>
+<pre>curl -b "user=alice;greeting=Hey;role=admin" http://localhost:3000/live</pre>
+
+<h2>Project</h2>
+<p><a href="https://github.com/renderffx/ppr-scratch" style="color:#58a6ff">github.com/renderffx/ppr-scratch</a> &mdash; &copy; 2026 renderffx</p>
+</body>
+</html>
