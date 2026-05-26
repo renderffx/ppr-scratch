@@ -4,9 +4,10 @@ import { Writable } from 'node:stream';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import App from './dist/App.bundle.js';
-import { getCachedBuffer, cacheFilePath, cacheManifest } from './src/flight-cache.js';
+import { getCachedBuffer, cacheManifest } from './src/flight-cache.js';
+import { setPhase, PHASES } from './src/phase.js';
 
-globalThis.__pprPhase = 'prerender';
+setPhase('prerender');
 
 function atomicWrite(filePath, data) {
   const tmpPath = filePath + '.tmp';
@@ -109,7 +110,7 @@ async function build() {
   console.log(`  has postponed state: ${!!postponed}`);
   console.log(`  cache entries: ${cacheEntries.length}`);
 
-  globalThis.__pprPhase = undefined;
+  setPhase(undefined);
 }
 
 build()
