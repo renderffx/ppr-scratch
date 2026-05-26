@@ -1,0 +1,36 @@
+{
+  "name": "ppr-scratch",
+  "version": "1.0.0",
+  "description": "Next.js-style Partial Prerendering engine using React 19 Canary",
+  "type": "module",
+  "scripts": {
+    "clean": "node -e \"import{rmSync}from'node:fs';rmSync('./dist',{recursive:true,force:true});console.log('Cleaned dist/')\"",
+    "bundle": "esbuild src/App.js --bundle --format=esm --platform=node --outfile=dist/App.bundle.js --loader:.js=jsx",
+    "build:rsc": "node --conditions react-server build-rsc.js",
+    "prewarm": "node --conditions react-server prewarm-cache.mjs",
+    "clean:cache": "node -e \"import{rmSync}from'node:fs';rmSync('./.rsc_cache',{recursive:true,force:true});console.log('Cleaned .rsc_cache/')\"",
+    "build": "npm run clean && npm run bundle && npm run build:rsc && node build.js",
+    "test": "node --test tests/ppr.test.js",
+    "test:e2e": "node --test tests/ppr-e2e.test.js",
+    "test:all": "node --test tests/*.test.js",
+    "dev:loop": "npm run build && npm run test:all",
+    "start": "node server.js"
+  },
+  "keywords": [
+    "ppr",
+    "react",
+    "prerendering",
+    "nextjs"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1",
+    "react": "^19.3.0-canary-f4e0d4ed-20260429",
+    "react-dom": "^19.3.0-canary-f4e0d4ed-20260429",
+    "react-server-dom-webpack": "^19.3.0-canary-f4e0d4ed-20260429"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}
