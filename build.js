@@ -3,6 +3,8 @@ import { prerenderToNodeStream } from 'react-dom/static';
 import { Writable } from 'node:stream';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import App from './dist/App.bundle.js';
 import { getCachedBuffer, cacheManifest } from './src/flight-cache.js';
 import { setPhase, PHASES } from './src/phase.js';
@@ -13,6 +15,23 @@ function atomicWrite(filePath, data) {
   const tmpPath = filePath + '.tmp';
   writeFileSync(tmpPath, data);
   renameSync(tmpPath, filePath);
+}
+
+function verifyPatch() {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const prodFile = resolve(__dirname, 'node_modules/react-dom/cjs/react-dom-server.node.production.js');
+  const devFile = resolve(__dirname, 'node_modules/react-dom/cjs/react-dom-server.node.development.js');
+
+  for (const file of [prodFile, devFile]) {
+    if (!existsSync(file)) continue;
+    const content = readFileSync(file, 'utf-8');
+    if (!content.includes('abort(request)')) {
+      throw new Error(
+        `React DOM patch not applied: ${file}\n` +
+        `Run "node scripts/patch-react-dom.mjs" or "npm run postinstall"`
+      );
+    }
+  }
 }
 
 function embedRSCPayload(html, payload) {
@@ -44,16 +63,43 @@ function embedCacheEntries(html) {
   return result;
 }
 
+function validateShell(html) {
+  const errors = [];
+  if (!html.startsWith('<!DOCTYPE html>')) errors.push('Missing DOCTYPE');
+  if (!html.includes('</html>')) errors.push('Missing closing html tag');
+  if (!/<!--\$?\??-->/.test(html)) errors.push('Missing Suspense boundary markers');
+
+  if (errors.length > 0) {
+    console.warn(`  [WARN] Shell validation issues:\n    - ${errors.join('\n    - ')}`);
+  }
+  return errors.length === 0;
+}
+
 async function build() {
+  console.log('PPR build starting...\n');
+
+  verifyPatch();
+  console.log('  [OK]   React DOM patch verified\n');
+
   execSync('node --conditions react-server prewarm-cache.mjs', { stdio: 'inherit' });
   console.log('');
 
+  const prerenderErrors = [];
   const result = await prerenderToNodeStream(
     createElement(App),
-    { onError() {} }
+    {
+      onError(err) {
+        prerenderErrors.push(err);
+        console.error('  [PRERENDER ERROR]', err?.message || err);
+      },
+    }
   );
 
   const postponed = result.postponed;
+  if (!postponed) {
+    throw new Error('Prerender produced no postponed state — no Suspense boundaries were suspended');
+  }
+
   const chunks = [];
   const writable = new Writable({
     write(chunk, _, cb) {
@@ -66,6 +112,8 @@ async function build() {
   await new Promise((resolve) => writable.on('finish', resolve));
 
   let shellHtml = Buffer.concat(chunks).toString('utf-8');
+
+  validateShell(shellHtml);
 
   const rscPayload = existsSync('./dist/rsc-payload.bin')
     ? readFileSync('./dist/rsc-payload.bin')
@@ -102,13 +150,16 @@ async function build() {
   };
   atomicWrite('./dist/manifest.json', JSON.stringify(manifest, null, 2));
 
-  console.log(`PPR build complete:`);
+  console.log(`\nPPR build complete:`);
   console.log(`  shell.html: ${Buffer.byteLength(shellHtml, 'utf-8')} bytes`);
   console.log(`  rsc-payload.bin: ${rscPayload ? rscPayload.length : 0} bytes`);
   console.log(`  postponed.json: ${Buffer.byteLength(JSON.stringify(postponed), 'utf-8')} bytes`);
   console.log(`  manifest.json: written`);
   console.log(`  has postponed state: ${!!postponed}`);
   console.log(`  cache entries: ${cacheEntries.length}`);
+  if (prerenderErrors.length > 0) {
+    console.log(`  prerender errors: ${prerenderErrors.length}`);
+  }
 
   setPhase(undefined);
 }
@@ -116,6 +167,6 @@ async function build() {
 build()
   .then(() => process.exit(0))
   .catch((err) => {
-    console.error('Build failed:', err);
+    console.error('\nBuild failed:', err);
     process.exit(1);
   });
