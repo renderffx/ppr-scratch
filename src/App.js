@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import { suspendIfPrerendering } from './dynamic-apis.js';
+import ErrorBoundary from './ErrorBoundary.js';
 
 function StaticHeader() {
   return React.createElement('header', { className: 'static-shell' },
@@ -76,17 +77,25 @@ export default function App() {
         React.createElement('hr', null),
         React.createElement('section', { className: 'dynamic-zone' },
           React.createElement('h2', null, 'Dynamic Holes (PPR Boundaries)'),
-          React.createElement(Suspense, { fallback: React.createElement('div', { className: 'suspense-placeholder' }, 'Loading personalized greeting...') },
-            React.createElement(CookieBasedGreeting, null)
+          React.createElement(ErrorBoundary, { name: 'CookieBasedGreeting' },
+            React.createElement(Suspense, { fallback: React.createElement('div', { className: 'suspense-placeholder' }, 'Loading personalized greeting...') },
+              React.createElement(CookieBasedGreeting, null)
+            )
           ),
-          React.createElement(Suspense, { fallback: React.createElement('div', { className: 'suspense-placeholder' }, 'Loading request-time content...') },
-            React.createElement(HeaderBasedContent, null)
+          React.createElement(ErrorBoundary, { name: 'HeaderBasedContent' },
+            React.createElement(Suspense, { fallback: React.createElement('div', { className: 'suspense-placeholder' }, 'Loading request-time content...') },
+              React.createElement(HeaderBasedContent, null)
+            )
           ),
-          React.createElement(Suspense, { fallback: React.createElement('div', { className: 'suspense-placeholder' }, 'Loading live data...') },
-            React.createElement(AsyncDataWidget, null)
+          React.createElement(ErrorBoundary, { name: 'AsyncDataWidget' },
+            React.createElement(Suspense, { fallback: React.createElement('div', { className: 'suspense-placeholder' }, 'Loading live data...') },
+              React.createElement(AsyncDataWidget, null)
+            )
           ),
-          React.createElement(Suspense, { fallback: React.createElement('div', { className: 'suspense-placeholder' }, 'Loading user profile...') },
-            React.createElement(AuthBasedSection, null)
+          React.createElement(ErrorBoundary, { name: 'AuthBasedSection' },
+            React.createElement(Suspense, { fallback: React.createElement('div', { className: 'suspense-placeholder' }, 'Loading user profile...') },
+              React.createElement(AuthBasedSection, null)
+            )
           )
         )
       ),
