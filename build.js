@@ -81,6 +81,13 @@ async function build() {
   verifyPatch();
   console.log('  [OK]   React DOM patch verified\n');
 
+  if (!existsSync('./dist/App.bundle.js')) {
+    throw new Error('dist/App.bundle.js not found. Run: npm run bundle');
+  }
+  if (!existsSync('./dist/rsc-payload.bin')) {
+    throw new Error('dist/rsc-payload.bin not found. Run: npm run build:rsc');
+  }
+
   execSync('node --conditions react-server prewarm-cache.mjs', { stdio: 'inherit' });
   console.log('');
 
