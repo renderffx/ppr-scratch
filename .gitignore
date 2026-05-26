@@ -2,5 +2,6 @@ node_modules/
 dist/
 .rsc_cache/
 nul
-_test_*.mjs
 *.log
+test-prerender*.mjs
+test-resume.mjs

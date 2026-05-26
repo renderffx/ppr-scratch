@@ -8,12 +8,20 @@ import { getCachedBuffer } from './src/flight-cache.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const RESUME_TIMEOUT_MS = parseInt(process.env.PPR_RESUME_TIMEOUT || '10000', 10);
+const RESUME_TIMEOUT_MS = Math.max(1000, parseInt(process.env.PPR_RESUME_TIMEOUT || '10000', 10));
 
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static('./public', { index: false }));
 
 const CACHED_NAMES = ['CookieBasedGreeting', 'HeaderBasedContent', 'AsyncDataWidget', 'AuthBasedSection'];
+const VALID_CACHE_NAMES = new Set(CACHED_NAMES);
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (m) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' })[m];
+  });
+}
 
 function withTimeout(promise, ms, label) {
   return Promise.race([
@@ -51,15 +59,31 @@ app.get('/rsc-payload', (req, res) => {
 
 app.get('/cache/:name', async (req, res) => {
   const { name } = req.params;
-  const buf = await getCachedBuffer(name, {});
-  if (!buf) {
-    return res.status(404).json({ error: `No cache entry for ${name}` });
+  if (!VALID_CACHE_NAMES.has(name)) {
+    return res.status(400).json({ error: `Invalid cache name. Valid: ${CACHED_NAMES.join(', ')}` });
   }
-  res.setHeader('Content-Type', 'application/octet-stream');
-  res.setHeader('X-Cache-Entry', name);
-  res.setHeader('Content-Length', buf.length);
-  res.send(buf);
+  try {
+    const buf = await getCachedBuffer(name, {});
+    if (!buf) {
+      return res.status(404).json({ error: `No cache entry for ${name}` });
+    }
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('X-Cache-Entry', name);
+    res.setHeader('Content-Length', buf.length);
+    res.send(buf);
+  } catch (err) {
+    res.status(500).json({ error: `Cache read failed: ${err.message}` });
+  }
 });
+
+function readPostponed(path) {
+  const raw = readFileSync(path, 'utf-8');
+  const parsed = JSON.parse(raw);
+  if (!parsed.resumableState || !Array.isArray(parsed.replayNodes)) {
+    throw new Error('Invalid postponed state: missing resumableState or replayNodes');
+  }
+  return parsed;
+}
 
 app.post('/resume', async (req, res) => {
   const postponedPath = './dist/postponed.json';
@@ -68,7 +92,8 @@ app.post('/resume', async (req, res) => {
   }
 
   try {
-    const hasCachedContent = CACHED_NAMES.some(n => getCachedBuffer(n, {}));
+    const cacheChecks = await Promise.all(CACHED_NAMES.map(n => getCachedBuffer(n, {})));
+    const hasCachedContent = cacheChecks.some(Boolean);
 
     if (hasCachedContent) {
       const resumedHtml = [];
@@ -77,9 +102,9 @@ app.post('/resume', async (req, res) => {
         if (buf) {
           resumedHtml.push(
             `<div class="ppr-cached-boundary" data-component="${name}">` +
-            `<h3>${name} <span class="badge">served from RSC cache</span></h3>` +
+            `<h3>${escapeHtml(name)} <span class="badge">served from RSC cache</span></h3>` +
             `<p class="meta">Cached RSC Flight payload: ${buf.length} bytes</p>` +
-            `<pre class="cache-key">Cache key: ${name}:{}</pre>` +
+            `<pre class="cache-key">Cache key: ${escapeHtml(name)}:{}</pre>` +
             `</div>`
           );
         }
@@ -93,7 +118,7 @@ app.post('/resume', async (req, res) => {
       });
     }
 
-    const postponed = JSON.parse(readFileSync(postponedPath, 'utf-8'));
+    const postponed = readPostponed(postponedPath);
     const chunks = [];
 
     const html = await withTimeout(new Promise((resolve, reject) => {
@@ -111,9 +136,6 @@ app.post('/resume', async (req, res) => {
         },
         onShellError(err) {
           reject(err);
-        },
-        onAllReady() {
-          // All content has been resumed — ensure flush
         },
       });
     }), RESUME_TIMEOUT_MS, 'Resume');
@@ -157,7 +179,7 @@ app.post('/resume/stream', async (req, res) => {
         if (buf) {
           res.write(
             `<div class="streamed-boundary" data-component="${name}">` +
-            `<h3>${name} (Streamed from RSC cache)</h3>` +
+            `<h3>${escapeHtml(name)} (Streamed from RSC cache)</h3>` +
             `<p>RSC payload: ${buf.length} bytes</p>` +
             `<p class="meta">Served at: ${new Date().toISOString()}</p>` +
             `</div>`
@@ -166,7 +188,7 @@ app.post('/resume/stream', async (req, res) => {
         }
       }
     } else {
-      const postponed = JSON.parse(readFileSync(postponedPath, 'utf-8'));
+      const postponed = readPostponed(postponedPath);
       const streamable = resumeToPipeableStream(createElement(App), postponed, {
         onShellReady() {
           streamable.pipe(res);
@@ -181,7 +203,7 @@ app.post('/resume/stream', async (req, res) => {
     res.write('<!--PPR_RESUME_STREAM_END-->');
     res.end();
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    try { res.status(500).json({ error: err.message }); } catch {}
   }
 });
 
@@ -220,6 +242,16 @@ app.get('/api/manifest', (req, res) => {
     return res.status(404).json({ error: 'No manifest found. Run build first.' });
   }
   res.json(JSON.parse(readFileSync('./dist/manifest.json', 'utf-8')));
+});
+
+app.use((req, res) => {
+  res.status(404).json({ error: `Not found: ${req.method} ${req.path}` });
+});
+
+app.use((err, req, res, _next) => {
+  console.error(`[ERROR] ${req.method} ${req.path}:`, err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT, () => {
